@@ -1,7 +1,7 @@
 import mongoose, { Schema } from "mongoose";
 import type { TGroup } from "./groupType.ts";
 
-const userSchema = new mongoose.Schema<TGroup>(
+const groupSchema = new mongoose.Schema<TGroup>(
   {
     name: { type: String, required: true },
     icon: { type: String, required: true },
@@ -15,4 +15,4 @@ const userSchema = new mongoose.Schema<TGroup>(
   },
   { timestamps: true }
 );
-export default mongoose.model<TGroup>("Group", userSchema);
+export default mongoose.model<TGroup>("Group", groupSchema);

@@ -1,4 +1,4 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose from "mongoose";
 import type { TFriendship } from "./friendshipTypes.ts";
 
 const friendshipSchema = new mongoose.Schema(
