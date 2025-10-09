@@ -3,6 +3,7 @@ import globalErrorHandler from "./middleware/globalErrorHandler.ts";
 import userRouter from "./User/userRoutes.ts";
 import cors from "cors";
 import { config } from "./config/config.ts";
+import friendshipRouter from "./Friendship/friendshipRoutes.ts";
 
 const app = express();
 app.use(express.json());
@@ -13,6 +14,7 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/users", userRouter);
+app.use("/api/friendship", friendshipRouter);
 
 app.use(globalErrorHandler);
 

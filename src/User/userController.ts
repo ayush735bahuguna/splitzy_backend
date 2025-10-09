@@ -11,7 +11,11 @@ import fs from "node:fs/promises";
 
 const { sign } = pkg;
 
-const createuser = async (req: Request, res: Response, next: NextFunction) => {
+export const createuser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
     const error = createHttpError(400, "All fields are required");
@@ -49,7 +53,11 @@ const createuser = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-const loginUser = async (req: Request, res: Response, next: NextFunction) => {
+export const loginUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const { email, password } = req.body;
   if (!email || !password) {
     const error = createHttpError(400, "All fields are required");
@@ -82,7 +90,7 @@ const loginUser = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-const updateUserDetails = async (
+export const updateUserDetails = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -158,7 +166,7 @@ const updateUserDetails = async (
   }
 };
 
-const getIndivisualUserById = async (
+export const getIndivisualUserById = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -173,7 +181,7 @@ const getIndivisualUserById = async (
   }
 };
 
-const getIndivisualUserByName = async (
+export const getIndivisualUserByName = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -191,10 +199,12 @@ const getIndivisualUserByName = async (
   }
 };
 
-export {
-  createuser,
-  loginUser,
-  updateUserDetails,
-  getIndivisualUserById,
-  getIndivisualUserByName,
+// for testing purpose
+export const getAllUsers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const users = await userModel.find();
+  res.json(users);
 };

@@ -1,6 +1,7 @@
 import express from "express";
 import {
   createuser,
+  getAllUsers,
   getIndivisualUserById,
   getIndivisualUserByName,
   loginUser,
@@ -27,5 +28,6 @@ userRouter.put(
 );
 userRouter.get("/:userId", authMiddleware, getIndivisualUserById);
 userRouter.post("/", authMiddleware, getIndivisualUserByName);
+userRouter.get("/", getAllUsers);
 
 export default userRouter;

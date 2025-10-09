@@ -6,4 +6,5 @@ export interface User {
   profilePicture: string;
   pushNotificationToken: string;
   pushNotifications: boolean;
+  friends: string[];
 }
