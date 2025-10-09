@@ -1,0 +1,20 @@
+import express from "express";
+
+import authMiddleware from "../middleware/authenticate.ts";
+import {
+  addusertoGroup,
+  createUsergroup,
+  deleteGroup,
+  getIndivisualGroup,
+  getUserGroups,
+} from "./groupController.ts";
+
+const groupRouter = express.Router();
+
+groupRouter.get("/", authMiddleware, getUserGroups);
+groupRouter.post("/", authMiddleware, createUsergroup);
+groupRouter.get("/:groupId", authMiddleware, getIndivisualGroup);
+groupRouter.put("/:groupId", authMiddleware, addusertoGroup);
+// groupRouter.delete("/:groupId", authMiddleware, deleteGroup);
+
+export default groupRouter;
