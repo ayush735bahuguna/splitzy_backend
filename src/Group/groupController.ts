@@ -2,6 +2,11 @@ import type { NextFunction, Request, Response } from "express";
 import groupModel from "./groupModel.ts";
 import type { AuthRequest } from "../middleware/authenticate.ts";
 import createHttpError from "http-errors";
+import mongoose from "mongoose";
+import expenseModel from "../Expense/expenseModel.ts";
+import paymentModel from "../Payment/paymentModel.ts";
+import type { User } from "../User/userTypes.ts";
+import { createNotification } from "../Notifications/notificationController.ts";
 
 export const getUserGroups = async (
   req: Request,
@@ -36,11 +41,16 @@ export const getIndivisualGroup = async (
       .findById(groupId)
       .populate("members", "_id name email profilePicture")
       .populate("createdBy", "_id name email profilePicture");
+    const _req = req as AuthRequest;
 
-    // if (!group?.members.includes(_req.userId)) {
-    //   const error = createHttpError(401, "Permission denied");
-    //   return next(error);
-    // }
+    if (
+      group?.members?.filter(
+        (e) => (e as unknown as User)._id.toString() === _req.userId
+      ).length === 0
+    ) {
+      const error = createHttpError(401, "Permission denied");
+      return next(error);
+    }
 
     res.json(group);
   } catch (err) {
@@ -49,7 +59,7 @@ export const getIndivisualGroup = async (
   }
 };
 
-export const createUsergroup = async (
+export const createGroup = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -89,6 +99,17 @@ export const createUsergroup = async (
       createdBy: _req.userId,
       description: groupDescription,
     });
+
+    await createNotification({
+      message: "You are added to new group",
+      notificationType: {
+        category: "group",
+        relatedId: group._id.toString(),
+      },
+      receivingUserId: groupMembers as [string],
+      type: "GROUP_CREATED",
+    });
+
     res.sendStatus(201);
   } catch (err) {
     const error = createHttpError(500, "Error creating group");
@@ -103,6 +124,11 @@ export const addusertoGroup = async (
 ) => {
   const { groupId } = req.params;
   const { groupMemberId } = req.body;
+
+  if (!groupId || !groupMemberId) {
+    const error = createHttpError(500, "Provide requored fields");
+    return next(error);
+  }
 
   try {
     const existingGroup = await groupModel.findById(groupId);
@@ -120,6 +146,28 @@ export const addusertoGroup = async (
         members: [...existingGroup.members, groupMemberId],
       }
     );
+    await createNotification({
+      message: "You are added to gruop",
+      notificationType: {
+        category: "group",
+        relatedId: groupId,
+      },
+
+      receivingUserId: [groupMemberId],
+      type: "GROUP_JOINED",
+    });
+    await createNotification({
+      message: "New member added to group",
+      notificationType: {
+        category: "group",
+        relatedId: groupId,
+      },
+      receivingUserId: existingGroup.members.map((e) =>
+        e.toString()
+      ) as string[],
+      type: "GROUP_JOINED",
+    });
+
     res.sendStatus(201);
   } catch (err) {
     const error = createHttpError(500, "Error adding user to group");
@@ -133,4 +181,46 @@ export const deleteGroup = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {};
+) => {
+  const { groupId } = req.params;
+
+  if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
+    return next(createHttpError(400, "Invalid or missing groupId"));
+  }
+
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const expenses = await expenseModel.find({ groupId }).session(session);
+    const expenseIds = expenses.map((e) => e._id);
+
+    await paymentModel
+      .deleteMany({ expenseId: { $in: expenseIds } })
+      .session(session);
+
+    await expenseModel
+      .deleteMany({ _id: { $in: expenseIds } })
+      .session(session);
+
+    const deleteResult = await groupModel
+      .deleteOne({ _id: groupId })
+      .session(session);
+
+    if (deleteResult.deletedCount === 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(createHttpError(404, "Group not found"));
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.sendStatus(204);
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    return next(createHttpError(500, "Error deleting group and related data"));
+  }
+};

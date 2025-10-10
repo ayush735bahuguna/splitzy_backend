@@ -3,7 +3,7 @@ import express from "express";
 import authMiddleware from "../middleware/authenticate.ts";
 import {
   addusertoGroup,
-  createUsergroup,
+  createGroup,
   deleteGroup,
   getIndivisualGroup,
   getUserGroups,
@@ -12,9 +12,9 @@ import {
 const groupRouter = express.Router();
 
 groupRouter.get("/", authMiddleware, getUserGroups);
-groupRouter.post("/", authMiddleware, createUsergroup);
+groupRouter.post("/", authMiddleware, createGroup);
 groupRouter.get("/:groupId", authMiddleware, getIndivisualGroup);
 groupRouter.put("/:groupId", authMiddleware, addusertoGroup);
-// groupRouter.delete("/:groupId", authMiddleware, deleteGroup);
+groupRouter.delete("/:groupId", authMiddleware, deleteGroup);
 
 export default groupRouter;

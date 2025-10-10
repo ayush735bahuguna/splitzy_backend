@@ -4,6 +4,10 @@ import createHttpError from "http-errors";
 import type { AuthRequest } from "../middleware/authenticate.ts";
 import mongoose from "mongoose";
 import paymentModel from "../Payment/paymentModel.ts";
+import groupModel from "../Group/groupModel.ts";
+import type { User } from "../User/userTypes.ts";
+import { isUserFriends } from "../Friendship/friendshipController.ts";
+import { createNotification } from "../Notifications/notificationController.ts";
 
 export const addExpense = async (
   req: Request,
@@ -18,12 +22,11 @@ export const addExpense = async (
       expenseDate,
       isGroupexpense,
       groupId,
-      reciptImage,
+      // reciptImage,
       relatedUsers,
       payers,
       splitType,
       splitMembers,
-      expensePayments,
     } = req.body;
 
     if (!expenseName || typeof expenseName !== "string") {
@@ -122,6 +125,66 @@ export const addExpense = async (
       }
     }
 
+    if (isGroupexpense) {
+      const group = await groupModel.findOne({ _id: groupId });
+
+      if (!group) {
+        const error = createHttpError(500, "No related group found");
+        return next(error);
+      }
+
+      if (
+        group?.members?.filter(
+          (e) => (e as unknown as User)._id.toString() === _req.userId
+        ).length === 0
+      ) {
+        const error = createHttpError(401, "Permission denied");
+        return next(error);
+      }
+    } else {
+      if (relatedUsers.length !== 2) {
+        return next(
+          createHttpError(400, "relatedUsers must be an array of two user IDs")
+        );
+      }
+      const friends = await isUserFriends(relatedUsers[0], relatedUsers[1]);
+      if (!friends) {
+        return next(
+          createHttpError(400, "Permission denied, users are not friend")
+        );
+      }
+    }
+
+    // for adding recipt file to expense
+    // let reciptImage = null;
+    // const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+
+    // if (files.reciptImage) {
+    //   const reciptImageMimeType = files.reciptImage?.[0]?.mimetype
+    //     ?.split("/")
+    //     .at(-1);
+
+    //   const filename = files?.reciptImage?.[0]?.filename;
+
+    //   if (!filename || !reciptImageMimeType) {
+    //     const error = createHttpError(400, "Recipt image file is required");
+    //     return next(error);
+    //   }
+    //   const filepath = path.resolve(
+    //     import.meta.dirname,
+    //     "../../Public/data/Uploads",
+    //     filename
+    //   );
+
+    //   const uploadResult = await cloudinary.uploader.upload(filepath, {
+    //     filename_override: filename,
+    //     folder: "Splitzy_reciptImage",
+    //     format: reciptImageMimeType,
+    //   });
+    //   await fs.unlink(filepath);
+
+    //   reciptImage = uploadResult.secure_url;
+    // }
     const expense = await expenseModel.create({
       expenseName,
       amount,
@@ -130,15 +193,24 @@ export const addExpense = async (
       status: "pending",
       isGroupexpense,
       groupId,
-      reciptImage,
+      reciptImage: "",
       relatedUsers,
       payers,
       splitType,
       splitMembers,
-      expensePayments,
     });
 
-    res.status(201).json(expense);
+    await createNotification({
+      message: "New expense added",
+      notificationType: {
+        category: "expense",
+        relatedId: expense._id.toString(),
+      },
+      receivingUserId: relatedUsers as [string],
+      type: "FRIEND_REQUEST_DECLINED",
+    });
+
+    res.sendStatus(201);
   } catch (err) {
     return next(createHttpError(500, "Internal Server Error"));
   }

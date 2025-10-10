@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import friendshipModel from "./friendshipModel.ts";
 import type { AuthRequest } from "../middleware/authenticate.ts";
 import createHttpError from "http-errors";
+import { createNotification } from "../Notifications/notificationController.ts";
 
 export const initializeFriendship = async (
   req: Request,
@@ -32,6 +33,13 @@ export const initializeFriendship = async (
     await friendshipModel.create({
       users: [_req.userId, friendId],
       requestedBy: _req.userId,
+    });
+
+    await createNotification({
+      message: "New friend request recieved",
+      notificationType: { category: "user", relatedId: _req.userId },
+      receivingUserId: friendId,
+      type: "FRIEND_REQUEST_RECEIVED",
     });
 
     res.status(201).json({ message: "Friend request sent successfully." });
@@ -89,10 +97,26 @@ export const updateFriendshipStatus = async (
       );
     }
 
-    await friendshipModel.findByIdAndUpdate(friendshipId, {
+    const friendship = await friendshipModel.findByIdAndUpdate(friendshipId, {
       status: newStatus,
     });
-
+    if (friendship?.requestedBy) {
+      if (newStatus == "declined") {
+        await createNotification({
+          message: "New friend request rejected",
+          notificationType: { category: "user", relatedId: _req.userId },
+          receivingUserId: [friendship?.requestedBy],
+          type: "FRIEND_REQUEST_DECLINED",
+        });
+      } else if (newStatus == "friends") {
+        await createNotification({
+          message: "New friend request recieved",
+          notificationType: { category: "user", relatedId: _req.userId },
+          receivingUserId: [friendship?.requestedBy],
+          type: "FRIEND_REQUEST_ACCEPTED",
+        });
+      }
+    }
     res
       .status(200)
       .json({ message: "Friendship status updated successfully." });
@@ -176,3 +200,16 @@ export const getUserfriendList = async (
     return next(error);
   }
 };
+
+export async function isUserFriends(
+  userId: string,
+  friendId: string
+): Promise<boolean> {
+  if (userId === friendId) return false;
+  const friendship = await friendshipModel.findOne({
+    status: "friends",
+    users: { $all: [userId, friendId] },
+  });
+
+  return !!friendship;
+}

@@ -27,8 +27,6 @@ export interface TExpense {
     isEqualShare: boolean;
   }>;
 
-  expensePayments: Types.ObjectId[];
-
   createdAt?: Date;
   updatedAt?: Date;
 }

@@ -32,7 +32,6 @@ const expenseSchema = new mongoose.Schema<TExpense>(
         isEqualShare: { type: Boolean, required: true },
       },
     ],
-    expensePayments: [{ type: Schema.Types.ObjectId, ref: "Payment" }],
   },
   { timestamps: true }
 );

@@ -4,6 +4,7 @@ import paymentModel from "./paymentModel.ts";
 import mongoose from "mongoose";
 import expenseModel from "../Expense/expenseModel.ts";
 import type { AuthRequest } from "../middleware/authenticate.ts";
+import { createNotification } from "../Notifications/notificationController.ts";
 
 export const addPayment = async (
   req: Request,
@@ -15,16 +16,14 @@ export const addPayment = async (
     amount,
     paymentDate,
     paymentMethod,
-    paymentFrom,
     paymentTo,
     isGroupPayment,
   } = req.body;
-
+  const _req = req as AuthRequest;
   if (
     !expenseId ||
     !amount ||
     !paymentMethod ||
-    !paymentFrom ||
     !paymentTo ||
     !isGroupPayment
   ) {
@@ -34,7 +33,6 @@ export const addPayment = async (
 
   if (
     !mongoose.Types.ObjectId.isValid(expenseId) ||
-    !mongoose.Types.ObjectId.isValid(paymentFrom) ||
     !mongoose.Types.ObjectId.isValid(paymentTo)
   ) {
     const error = createHttpError(400, "Invalid ObjectId(s) provided");
@@ -70,8 +68,7 @@ export const addPayment = async (
       remainingByUser.set(userId, owedAmount - paidAmount);
     });
 
-    const currentUserId = paymentFrom.toString();
-    const remainingForUser = remainingByUser.get(currentUserId);
+    const remainingForUser = remainingByUser.get(_req.userId);
 
     if (remainingForUser === undefined) {
       return next(createHttpError(400, "User not authorized for this expense"));
@@ -90,20 +87,27 @@ export const addPayment = async (
       return next(error);
     }
 
-    const newPayment = await paymentModel.create({
+    const payment = await paymentModel.create({
       expenseId,
       amount,
       paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
       paymentMethod,
-      paymentFrom,
+      paymentFrom: _req.userId,
       paymentTo,
       isGroupPayment,
     });
 
-    expense.expensePayments.push(newPayment._id);
-    await expense.save();
+    await createNotification({
+      message: "New payment recieved",
+      notificationType: {
+        category: "payment",
+        relatedId: payment._id.toString(),
+      },
+      receivingUserId: [paymentTo] as string[],
+      type: "EXPENSE_CREATED",
+    });
 
-    res.status(201).json(newPayment);
+    res.sendStatus(201);
   } catch (err) {
     const error = createHttpError(500, "Error while registering payment");
     return next(error);
@@ -123,7 +127,11 @@ export const getExpensePayment = async (
   }
 
   try {
-    const payments = await paymentModel.find({ expenseId });
+    const payments = await paymentModel
+      .find({ expenseId })
+      .populate("paymentFrom", "name profilePicture")
+      .populate("paymentTo", "name profilePicture");
+
     res.json(payments);
   } catch (err) {
     const error = createHttpError(500, "Error fetching payments for expense");
@@ -150,9 +158,12 @@ export const getGroupPayment = async (
     );
     const expenseIds = expenses.map((expense) => expense._id);
 
-    const payments = await paymentModel.find({
-      expenseId: { $in: expenseIds },
-    });
+    const payments = await paymentModel
+      .find({
+        expenseId: { $in: expenseIds },
+      })
+      .populate("paymentFrom", "name profilePicture")
+      .populate("paymentTo", "name profilePicture");
 
     res.json(payments);
   } catch (err) {
@@ -175,15 +186,18 @@ export const getFriendsPayment = async (
   }
 
   try {
-    const payments = await paymentModel.find(
-      {
-        $or: [
-          { paymentFrom: _req.userId, paymentTo: friendId },
-          { paymentFrom: friendId, paymentTo: _req.userId },
-        ],
-      },
-      { isGroupPayment: false }
-    );
+    const payments = await paymentModel
+      .find(
+        {
+          $or: [
+            { paymentFrom: _req.userId, paymentTo: friendId },
+            { paymentFrom: friendId, paymentTo: _req.userId },
+          ],
+        },
+        { isGroupPayment: false }
+      )
+      .populate("paymentFrom", "name profilePicture")
+      .populate("paymentTo", "name profilePicture");
 
     res.json(payments);
   } catch (err) {

@@ -1,6 +1,7 @@
 import { Types } from "mongoose";
 
 export interface TPayment {
+  _id: Types.ObjectId;
   expenseId: Types.ObjectId;
   amount: number;
   paymentDate?: Date;
