@@ -3,6 +3,7 @@ import type { AuthRequest } from "../middleware/authenticate.ts";
 import notificationModel from "./notificationModel.ts";
 import createHttpError from "http-errors";
 import type { TNotification } from "./notificationType.ts";
+import { sendAndroidNotification } from "./fcmAndroidNotification.ts";
 
 export const getNotification = async (
   req: Request,
@@ -49,6 +50,15 @@ export async function createNotification(payload: NotificationPayload) {
     }));
 
     await notificationModel.insertMany(notifications);
+
+    // add android notification config
+    // await sendAndroidNotification(
+    //   payload.receivingUserId,
+    //   "",
+    //   payload.message,
+    //   "",
+    //   ""
+    // );
   } catch (err) {
     console.error("Failed to create notification:", err);
     throw err;
