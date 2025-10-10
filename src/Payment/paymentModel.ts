@@ -32,6 +32,7 @@ const paymentSchema = new mongoose.Schema<TPayment>(
       ref: "User",
       required: true,
     },
+    isGroupPayment: { type: Boolean, required: true },
   },
   { timestamps: true }
 );

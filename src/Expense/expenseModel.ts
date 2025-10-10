@@ -10,10 +10,11 @@ const expenseSchema = new mongoose.Schema<TExpense>(
     status: { type: String, enum: ["pending", "settled"], required: true },
     isGroupexpense: { type: Boolean, required: true },
     groupId: { type: Schema.Types.ObjectId, ref: "Group" },
+    reciptImage: { type: String },
     relatedUsers: [{ type: Schema.Types.ObjectId, ref: "User" }],
     payers: [
       {
-        user: { type: Schema.Types.ObjectId, ref: "User" },
+        user: { type: Schema.Types.ObjectId, ref: "User", required: true },
         amountPaid: { type: Number, required: true },
       },
     ],
@@ -24,7 +25,7 @@ const expenseSchema = new mongoose.Schema<TExpense>(
     },
     splitMembers: [
       {
-        user: { type: Schema.Types.ObjectId, ref: "User" },
+        user: { type: Schema.Types.ObjectId, ref: "User", required: true },
         amountPaid: { type: Number, required: true },
         share: { type: Number },
         percentage: { type: Number },

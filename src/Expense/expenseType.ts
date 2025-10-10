@@ -7,19 +7,20 @@ export interface TExpense {
   expenseDate?: Date;
   status: "pending" | "settled";
 
+  reciptImage?: string;
   isGroupexpense: boolean;
   groupId?: Types.ObjectId;
   relatedUsers: Types.ObjectId[];
 
   payers: Array<{
-    user?: Types.ObjectId;
+    user: Types.ObjectId;
     amountPaid: number;
   }>;
 
   splitType: "equal" | "unequal" | "percentage" | "share";
 
   splitMembers: Array<{
-    user?: Types.ObjectId;
+    user: Types.ObjectId;
     amountPaid: number;
     share?: number;
     percentage?: number;

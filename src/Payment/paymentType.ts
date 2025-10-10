@@ -15,4 +15,5 @@ export interface TPayment {
   paymentTo: Types.ObjectId;
   createdAt?: Date;
   updatedAt?: Date;
+  isGroupPayment: boolean;
 }
