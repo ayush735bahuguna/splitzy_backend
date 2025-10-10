@@ -6,6 +6,7 @@ import { config } from "./config/config.ts";
 import friendshipRouter from "./Friendship/friendshipRoutes.ts";
 import groupRouter from "./Group/groupRoutes.ts";
 import paymentRouter from "./Payment/paymentRoute.ts";
+import expenseRouter from "./Expense/expenseRoutes.ts";
 
 const app = express();
 app.use(express.json());
@@ -17,6 +18,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/users", userRouter);
 app.use("/api/friendship", friendshipRouter);
+app.use("/api/expenses", expenseRouter);
 app.use("/api/groups", groupRouter);
 app.use("/api/payments", paymentRouter);
 
