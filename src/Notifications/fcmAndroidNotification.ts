@@ -42,7 +42,7 @@ export const sendAndroidNotification = async (
       .filter((token): token is string => !!token);
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const key = require("./fcm.json");
+    const key = require("../../fcm.json");
     const firebaseAccessToken = await getAccessTokenAsync(key);
 
     const messageBody = {

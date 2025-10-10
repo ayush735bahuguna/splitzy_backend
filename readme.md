@@ -36,9 +36,15 @@ A backend API built with Node.js, Express, and MongoDB for managing group and fr
 
 1. Clone the repo:
 
+   git clone https://github.com/ayush735bahuguna/splitzy_backend.git
+   cd expense-sharing-backend
+
 2. Install dependencies:
 
+   npm install
+
 3. Set up environment variables (`.env`) with at least:
+
    MONGO_URI=your_mongo_connection_string
    CLOUDINARY_CLOUD_NAME=your_cloud_name
    CLOUDINARY_API_KEY=your_api_key
