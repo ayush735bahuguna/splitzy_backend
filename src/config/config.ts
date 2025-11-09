@@ -9,7 +9,8 @@ const _config = {
   cloudName: process.env.CLOUDINARY_CLOUD_NAME,
   apiKey: process.env.CLOUDINARY_API_KEY,
   apiSecret: process.env.CLOUDINARY_API_SECRET,
-  frontendDomain: process.env.FRONTEND_DOMAIN,
+  // frontendDomain: process.env.FRONTEND_DOMAIN,
+  frontendDomain: "*",
 };
 
 export const config = Object.freeze(_config);
