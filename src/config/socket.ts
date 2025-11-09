@@ -11,7 +11,7 @@ export const initSocket = (server: http.Server) => {
   });
 
   io.on("connection", (socket: Socket) => {
-    console.log(`[${socket.id}] connected`);
+    console.log(`⚡ [${socket.id}] connected`);
 
     socket.on("join:user", (userId: string) => {
       socket.join(`user:${userId}`);
@@ -21,6 +21,11 @@ export const initSocket = (server: http.Server) => {
     socket.on("join:group", async ({ groupId, user }) => {
       socket.join(`group:${groupId}`);
       console.log(`👥 ${user.name} joined group ${groupId}`);
+    });
+
+    socket.on("join:friendShip", async ({ friendShipId, user }) => {
+      socket.join(`friendShip:${friendShipId}`);
+      console.log(`👥 ${user.name} joined friendShip ${friendShipId}`);
     });
 
     socket.on("disconnect", () => {

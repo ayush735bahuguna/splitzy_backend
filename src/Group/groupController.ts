@@ -7,6 +7,9 @@ import expenseModel from "../Expense/expenseModel.ts";
 import paymentModel from "../Payment/paymentModel.ts";
 import type { User } from "../User/userTypes.ts";
 import { createNotification } from "../Notifications/notificationController.ts";
+import { getIO } from "../config/socket.ts";
+import type { TGroup } from "./groupType.ts";
+const io = getIO();
 
 export const getUserGroups = async (
   req: Request,
@@ -100,8 +103,17 @@ export const createGroup = async (
       description: groupDescription,
     });
 
+    groupMembers.forEach((memberId: string) => {
+      io.to(`user:${memberId.toString()}`).emit("group:notify", {
+        type: "group:new_group_created",
+        title: "🎉 New Group Joined!",
+        message: `You’ve been added to **${groupName}**.`,
+        group: group,
+      });
+    });
+
     await createNotification({
-      message: "You are added to new group",
+      message: `You’ve been added to **${groupName}**.`,
       notificationType: {
         category: "group",
         relatedId: group._id.toString(),
@@ -146,6 +158,21 @@ export const addusertoGroup = async (
         members: [...existingGroup.members, groupMemberId],
       }
     );
+    existingGroup.members.forEach((memberId) => {
+      io.to(`user:${memberId}`).emit("group:notify", {
+        type: "group:member_added",
+        title: "👋 New Member Joined!",
+        message: `Someone added a new member to **${existingGroup.name}**.`,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    io.to(`user:${groupMemberId}`).emit("group:notify", {
+      type: "group:added_to_group",
+      title: "🎉 You’ve Joined a New Group!",
+      message: `You’ve been added to **${existingGroup.name}**.`,
+      timestamp: new Date().toISOString(),
+    });
     await createNotification({
       message: "You are added to gruop",
       notificationType: {
@@ -182,10 +209,27 @@ export const deleteGroup = async (
   res: Response,
   next: NextFunction
 ) => {
+  const _req = req as AuthRequest;
   const { groupId } = req.params;
 
   if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
     return next(createHttpError(400, "Invalid or missing groupId"));
+  }
+
+  const existingGroup = (await groupModel
+    .findById(groupId)
+    .populate("createdBy", "name")) as unknown as TGroup & {
+    createdBy: { _id: string; name: string };
+  };
+
+  if (!existingGroup) {
+    const error = createHttpError(500, "No related group found");
+    return next(error);
+  }
+
+  if (existingGroup.createdBy.toString() !== _req.userId) {
+    const error = createHttpError(500, "Only Creator can delete Group.");
+    return next(error);
   }
 
   const session = await mongoose.startSession();
@@ -207,6 +251,15 @@ export const deleteGroup = async (
     const deleteResult = await groupModel
       .deleteOne({ _id: groupId })
       .session(session);
+
+    existingGroup.members.forEach((memberId) => {
+      io.to(`user:${memberId}`).emit("group:notify", {
+        type: "group:deleted",
+        title: "❌ Group Deleted",
+        message: `The group **${existingGroup.name}** has been deleted by **${existingGroup.createdBy.name}**.`,
+        timestamp: new Date().toISOString(),
+      });
+    });
 
     if (deleteResult.deletedCount === 0) {
       await session.abortTransaction();
