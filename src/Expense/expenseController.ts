@@ -8,6 +8,9 @@ import groupModel from "../Group/groupModel.ts";
 import type { User } from "../User/userTypes.ts";
 import { isUserFriends } from "../Friendship/friendshipController.ts";
 import { createNotification } from "../Notifications/notificationController.ts";
+import { getIO } from "../config/socket.ts";
+import type { TExpense } from "./expenseType.ts";
+const io = getIO();
 
 export const addExpense = async (
   req: Request,
@@ -124,9 +127,9 @@ export const addExpense = async (
         );
       }
     }
-
+    let group;
     if (isGroupexpense) {
-      const group = await groupModel.findOne({ _id: groupId });
+      group = await groupModel.findOne({ _id: groupId });
 
       if (!group) {
         const error = createHttpError(500, "No related group found");
@@ -199,6 +202,27 @@ export const addExpense = async (
       splitType,
       splitMembers,
     });
+
+    if (isGroupexpense) {
+      io.to(`group:${groupId}`).emit("group:notify", {
+        type: "group:expense_added",
+        title: "💸 New Group Expense Added!",
+        message: `A new expense has been added to **${group?.name}**.`,
+        expense: expense,
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      const addedByName = "Someone";
+      relatedUsers?.forEach((memberId) => {
+        io.to(`user:${memberId}`).emit("user:notify", {
+          type: "user:expense_added",
+          title: "💰 New Shared Expense",
+          message: `${addedByName} added a shared expense with you.`,
+          expense: expense,
+          timestamp: new Date().toISOString(),
+        });
+      });
+    }
 
     await createNotification({
       message: "New expense added",
@@ -275,10 +299,27 @@ export const deleteExpense = async (
   res: Response,
   next: NextFunction
 ) => {
+  const _req = req as AuthRequest;
   const { expenseId } = req.params;
 
   if (!expenseId || !mongoose.Types.ObjectId.isValid(expenseId)) {
     return next(createHttpError(400, "Invalid or missing expenseId"));
+  }
+
+  const existingExpenses = (await expenseModel.findById(
+    expenseId
+  )) as unknown as TExpense & {
+    createdBy: { _id: string; name: string };
+  };
+
+  if (!existingExpenses) {
+    const error = createHttpError(500, "No related expense found");
+    return next(error);
+  }
+
+  if (existingExpenses.createdBy.toString() !== _req.userId) {
+    const error = createHttpError(500, "Only creator can delete expense.");
+    return next(error);
   }
 
   const session = await mongoose.startSession();
@@ -290,6 +331,15 @@ export const deleteExpense = async (
     const deleteResult = await expenseModel
       .deleteOne({ _id: expenseId })
       .session(session);
+
+    existingExpenses.relatedUsers.forEach((memberId) => {
+      io.to(`user:${memberId}`).emit("user:notify", {
+        type: "user:deleted_expense",
+        title: "❌ Expense Deleted",
+        message: `The expense **${existingExpenses.expenseName}** has been deleted by **${existingExpenses.createdBy.name}**.`,
+        timestamp: new Date().toISOString(),
+      });
+    });
 
     if (deleteResult.deletedCount === 0) {
       await session.abortTransaction();

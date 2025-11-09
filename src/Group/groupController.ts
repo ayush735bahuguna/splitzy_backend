@@ -228,7 +228,7 @@ export const deleteGroup = async (
   }
 
   if (existingGroup.createdBy.toString() !== _req.userId) {
-    const error = createHttpError(500, "Only Creator can delete Group.");
+    const error = createHttpError(500, "Only creator can delete Group.");
     return next(error);
   }
 
