@@ -5,6 +5,8 @@ import mongoose from "mongoose";
 import expenseModel from "../Expense/expenseModel.ts";
 import type { AuthRequest } from "../middleware/authenticate.ts";
 import { createNotification } from "../Notifications/notificationController.ts";
+import { getIO } from "../config/socket.ts";
+const io = getIO();
 
 export const addPayment = async (
   req: Request,
@@ -105,6 +107,16 @@ export const addPayment = async (
       },
       receivingUserId: [paymentTo] as string[],
       type: "EXPENSE_CREATED",
+    });
+
+    io.to(`user:${paymentTo}`).emit("user:notify", {
+      type: "user:payment_received",
+      title: "💸 Payment Received!",
+      // message: `${senderName} has sent you ₹${amount}.`,
+      message: `Someone has sent you ₹${amount}.`,
+      user: _req.userId,
+      data: payment,
+      timestamp: new Date().toISOString(),
     });
 
     res.sendStatus(201);

@@ -108,7 +108,8 @@ export const createGroup = async (
         type: "group:new_group_created",
         title: "🎉 New Group Joined!",
         message: `You’ve been added to **${groupName}**.`,
-        group: group,
+        data: group,
+        timestamp: new Date().toISOString(),
       });
     });
 
@@ -152,7 +153,7 @@ export const addusertoGroup = async (
       const error = createHttpError(500, "User already exist");
       return next(error);
     }
-    await groupModel.findByIdAndUpdate(
+    const updatedGroup = await groupModel.findByIdAndUpdate(
       { _id: groupId },
       {
         members: [...existingGroup.members, groupMemberId],
@@ -163,6 +164,7 @@ export const addusertoGroup = async (
         type: "group:member_added",
         title: "👋 New Member Joined!",
         message: `Someone added a new member to **${existingGroup.name}**.`,
+        data: updatedGroup,
         timestamp: new Date().toISOString(),
       });
     });
@@ -171,6 +173,7 @@ export const addusertoGroup = async (
       type: "group:added_to_group",
       title: "🎉 You’ve Joined a New Group!",
       message: `You’ve been added to **${existingGroup.name}**.`,
+      data: updatedGroup,
       timestamp: new Date().toISOString(),
     });
     await createNotification({
@@ -252,20 +255,20 @@ export const deleteGroup = async (
       .deleteOne({ _id: groupId })
       .session(session);
 
-    existingGroup.members.forEach((memberId) => {
-      io.to(`user:${memberId}`).emit("group:notify", {
-        type: "group:deleted",
-        title: "❌ Group Deleted",
-        message: `The group **${existingGroup.name}** has been deleted by **${existingGroup.createdBy.name}**.`,
-        timestamp: new Date().toISOString(),
-      });
-    });
-
     if (deleteResult.deletedCount === 0) {
       await session.abortTransaction();
       session.endSession();
       return next(createHttpError(404, "Group not found"));
     }
+    existingGroup.members.forEach((memberId) => {
+      io.to(`user:${memberId}`).emit("group:notify", {
+        type: "group:deleted",
+        title: "❌ Group Deleted",
+        message: `The group **${existingGroup.name}** has been deleted by **${existingGroup.createdBy.name}**.`,
+        data: existingGroup,
+        timestamp: new Date().toISOString(),
+      });
+    });
 
     await session.commitTransaction();
     session.endSession();

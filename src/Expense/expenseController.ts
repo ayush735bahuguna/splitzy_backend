@@ -208,7 +208,7 @@ export const addExpense = async (
         type: "group:expense_added",
         title: "💸 New Group Expense Added!",
         message: `A new expense has been added to **${group?.name}**.`,
-        expense: expense,
+        data: expense,
         timestamp: new Date().toISOString(),
       });
     } else {
@@ -218,7 +218,7 @@ export const addExpense = async (
           type: "user:expense_added",
           title: "💰 New Shared Expense",
           message: `${addedByName} added a shared expense with you.`,
-          expense: expense,
+          data: expense,
           timestamp: new Date().toISOString(),
         });
       });
@@ -332,15 +332,6 @@ export const deleteExpense = async (
       .deleteOne({ _id: expenseId })
       .session(session);
 
-    existingExpenses.relatedUsers.forEach((memberId) => {
-      io.to(`user:${memberId}`).emit("user:notify", {
-        type: "user:deleted_expense",
-        title: "❌ Expense Deleted",
-        message: `The expense **${existingExpenses.expenseName}** has been deleted by **${existingExpenses.createdBy.name}**.`,
-        timestamp: new Date().toISOString(),
-      });
-    });
-
     if (deleteResult.deletedCount === 0) {
       await session.abortTransaction();
       session.endSession();
@@ -349,6 +340,16 @@ export const deleteExpense = async (
 
     await session.commitTransaction();
     session.endSession();
+
+    existingExpenses.relatedUsers.forEach((memberId) => {
+      io.to(`user:${memberId}`).emit("user:notify", {
+        type: "user:deleted_expense",
+        title: "❌ Expense Deleted",
+        message: `The expense **${existingExpenses.expenseName}** has been deleted by **${existingExpenses.createdBy.name}**.`,
+        targetId: expenseId,
+        timestamp: new Date().toISOString(),
+      });
+    });
 
     res.sendStatus(204);
   } catch (err) {
