@@ -9,7 +9,6 @@ import type { User } from "../User/userTypes.ts";
 import { createNotification } from "../Notifications/notificationController.ts";
 import { getIO } from "../config/socket.ts";
 import type { TGroup } from "./groupType.ts";
-const io = getIO();
 
 export const getUserGroups = async (
   req: Request,
@@ -67,6 +66,8 @@ export const createGroup = async (
   res: Response,
   next: NextFunction
 ) => {
+  const io = getIO();
+
   const _req = req as AuthRequest;
   const { groupName, groupMembers, groupDescription, groupIcon } = req.body;
 
@@ -135,6 +136,9 @@ export const addusertoGroup = async (
   res: Response,
   next: NextFunction
 ) => {
+  const io = getIO();
+  const _req = req as AuthRequest;
+
   const { groupId } = req.params;
   const { groupMemberId } = req.body;
 
@@ -149,54 +153,72 @@ export const addusertoGroup = async (
       const error = createHttpError(500, "No related group found");
       return next(error);
     }
-    if (existingGroup.members.includes(groupMemberId)) {
-      const error = createHttpError(500, "User already exist");
-      return next(error);
-    }
-    const updatedGroup = await groupModel.findByIdAndUpdate(
+    // if (existingGroup.members.includes(groupMemberId)) {
+    //   const error = createHttpError(500, "User already exist");
+    //   return next(error);
+    // }
+    await existingGroup.updateOne(
       { _id: groupId },
       {
         members: [...existingGroup.members, groupMemberId],
       }
     );
-    existingGroup.members.forEach((memberId) => {
-      io.to(`user:${memberId}`).emit("group:notify", {
-        type: "group:member_added",
-        title: "👋 New Member Joined!",
-        message: `Someone added a new member to **${existingGroup.name}**.`,
-        data: updatedGroup,
-        timestamp: new Date().toISOString(),
-      });
+
+    await existingGroup.populate("members", "name");
+
+    const user = (
+      existingGroup.members as unknown as { _id: string; name: string }[]
+    ).filter((e) => e._id.toString() === _req.userId)[0];
+
+    (
+      existingGroup.members as unknown as { _id: string; name: string }[]
+    ).forEach((member) => {
+      if (member._id.toString() !== groupMemberId)
+        io.to(`user:${member._id.toString()}`).emit("user:notify", {
+          type: "user:member_added",
+          title: "👋 New Member Joined!",
+          message: `${user?.name} added a new member to **${existingGroup.name}**.`,
+          data: existingGroup,
+          timestamp: new Date().toISOString(),
+        });
     });
 
-    io.to(`user:${groupMemberId}`).emit("group:notify", {
-      type: "group:added_to_group",
-      title: "🎉 You’ve Joined a New Group!",
-      message: `You’ve been added to **${existingGroup.name}**.`,
-      data: updatedGroup,
+    io.to(`group:${groupId}`).emit("group:notify", {
+      type: "group:member_added",
+      title: "👋 New Member Joined!",
+      message: `${user?.name} added a new member to **${existingGroup.name}**.`,
+      data: existingGroup,
       timestamp: new Date().toISOString(),
     });
-    await createNotification({
-      message: "You are added to gruop",
-      notificationType: {
-        category: "group",
-        relatedId: groupId,
-      },
 
-      receivingUserId: [groupMemberId],
-      type: "GROUP_JOINED",
+    io.to(`user:${groupMemberId}`).emit("user:notify", {
+      type: "user:added_to_group",
+      title: "🎉 You’ve Joined a New Group!",
+      message: `You’ve been added to **${existingGroup.name}** by ${user?.name}.`,
+      data: existingGroup,
+      timestamp: new Date().toISOString(),
     });
-    await createNotification({
-      message: "New member added to group",
-      notificationType: {
-        category: "group",
-        relatedId: groupId,
-      },
-      receivingUserId: existingGroup.members.map((e) =>
-        e.toString()
-      ) as string[],
-      type: "GROUP_JOINED",
-    });
+    // await createNotification({
+    //   message: "You are added to gruop",
+    //   notificationType: {
+    //     category: "group",
+    //     relatedId: groupId,
+    //   },
+
+    //   receivingUserId: [groupMemberId],
+    //   type: "GROUP_JOINED",
+    // });
+    // await createNotification({
+    //   message: "New member added to group",
+    //   notificationType: {
+    //     category: "group",
+    //     relatedId: groupId,
+    //   },
+    //   receivingUserId: existingGroup.members.map((e) =>
+    //     e.toString()
+    //   ) as string[],
+    //   type: "GROUP_JOINED",
+    // });
 
     res.sendStatus(201);
   } catch (err) {
@@ -212,6 +234,8 @@ export const deleteGroup = async (
   res: Response,
   next: NextFunction
 ) => {
+  const io = getIO();
+
   const _req = req as AuthRequest;
   const { groupId } = req.params;
 

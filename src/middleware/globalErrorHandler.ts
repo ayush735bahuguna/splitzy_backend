@@ -9,6 +9,7 @@ const globalErrorHandler = (
   next: NextFunction
 ) => {
   const statusCode = err.statusCode;
+
   res.status(statusCode).json({
     message: err.message,
     errStack: config.env === "development" ? err.stack : "",

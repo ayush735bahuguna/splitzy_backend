@@ -4,13 +4,14 @@ import type { AuthRequest } from "../middleware/authenticate.ts";
 import createHttpError from "http-errors";
 import { createNotification } from "../Notifications/notificationController.ts";
 import { getIO } from "../config/socket.ts";
-const io = getIO();
 
 export const initializeFriendship = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
+  const io = getIO();
+
   const _req = req as AuthRequest;
   const { friendId } = req.body;
 
@@ -36,14 +37,18 @@ export const initializeFriendship = async (
       users: [_req.userId, friendId],
       requestedBy: _req.userId,
     });
+    await friendShip.populate("requestedBy", "name");
 
-    await createNotification({
-      message: "New friend request recieved",
-      notificationType: { category: "user", relatedId: _req.userId },
-      receivingUserId: friendId,
-      type: "FRIEND_REQUEST_RECEIVED",
-    });
-    const senderName = "Someone";
+    const senderName = (
+      friendShip.requestedBy as unknown as { _id: string; name: string }
+    )?.name;
+    // await createNotification({
+    //   message: "New friend request recieved",
+    //   notificationType: { category: "user", relatedId: _req.userId },
+    //   receivingUserId: [friendId],
+    //   type: "FRIEND_REQUEST_RECEIVED",
+    // });
+
     io.to(`user:${friendId}`).emit("user:notify", {
       type: "user:friend_request_received",
       title: "👋 New Friend Request!",
@@ -68,6 +73,8 @@ export const updateFriendshipStatus = async (
   res: Response,
   next: NextFunction
 ) => {
+  const io = getIO();
+
   const _req = req as AuthRequest;
   const { friendshipId } = req.params;
   const { newStatus } = req.body;
@@ -106,62 +113,75 @@ export const updateFriendshipStatus = async (
         )
       );
     }
-
-    const friendship = await friendshipModel.findByIdAndUpdate(friendshipId, {
+    await existingFriendship.updateOne({
+      _id: friendshipId,
       status: newStatus,
     });
+    // const friendship = await friendshipModel.findByIdAndUpdate(friendshipId, {
+    //   status: newStatus,
+    // });
+    await existingFriendship.populate("requestedBy", "name");
+    await existingFriendship.populate("users", "name");
 
-    if (friendship?.requestedBy) {
-      const senderId = friendship.requestedBy.toString();
-      const receiverName = "Someone";
-      const timestamp = new Date().toISOString();
+    const requestedBy = existingFriendship.requestedBy as unknown as {
+      _id: string;
+      name: string;
+    };
+    const recievingUser = (
+      existingFriendship.users as unknown as { _id: string; name: string }[]
+    ).filter((e) => e._id.toString() !== requestedBy._id.toString())[0];
 
-      if (newStatus === "declined") {
-        await createNotification({
-          message: `${receiverName} declined your friend request.`,
-          notificationType: { category: "user", relatedId: _req.userId },
-          receivingUserId: [senderId],
-          type: "FRIEND_REQUEST_DECLINED",
-        });
+    const senderId = requestedBy._id.toString();
+    const receiverName = recievingUser?.name;
+    const timestamp = new Date().toISOString();
 
-        io.to(`user:${senderId}`).emit("user:notify", {
-          type: "user:friend_request_declined",
-          title: "❌ Friend Request Declined",
-          message: `${receiverName} has declined your friend request.`,
-          data: friendship,
-          timestamp,
-        });
-      } else if (newStatus === "friends") {
-        await createNotification({
-          message: `${receiverName} accepted your friend request.`,
-          notificationType: { category: "user", relatedId: _req.userId },
-          receivingUserId: [senderId],
-          type: "FRIEND_REQUEST_ACCEPTED",
-        });
+    if (newStatus === "declined") {
+      // await createNotification({
+      //   message: `${receiverName} declined your friend request.`,
+      //   notificationType: { category: "user", relatedId: _req.userId },
+      //   receivingUserId: [senderId],
+      //   type: "FRIEND_REQUEST_DECLINED",
+      // });
 
-        io.to(`user:${senderId}`).emit("user:notify", {
-          type: "user:friend_request_accepted",
-          title: "🎉 Friend Request Accepted!",
-          message: `${receiverName} is now your friend.`,
-          data: friendship,
-          timestamp,
-        });
+      io.to(`user:${senderId}`).emit("user:notify", {
+        type: "user:friend_request_declined",
+        title: "❌ Friend Request Declined",
+        message: `${receiverName} has declined your friend request.`,
+        data: existingFriendship,
+        timestamp,
+      });
+    } else if (newStatus === "friends") {
+      // await createNotification({
+      //   message: `${receiverName} accepted your friend request.`,
+      //   notificationType: { category: "user", relatedId: _req.userId },
+      //   receivingUserId: [senderId],
+      //   type: "FRIEND_REQUEST_ACCEPTED",
+      // });
 
-        io.to(`user:${_req.userId}`).emit("user:notify", {
-          type: "user:friend_request_accepted_self",
-          title: "🤝 You’re Now Friends!",
-          // message: `You and ${friendship.friendName} are now friends.`,
-          message: `You and ${receiverName} are now friends.`,
-          data: friendship,
-          timestamp,
-        });
-      }
+      io.to(`user:${senderId}`).emit("user:notify", {
+        type: "user:friend_request_accepted",
+        title: "🎉 Friend Request Accepted!",
+        message: `${receiverName} is now your friend.`,
+        data: existingFriendship,
+        timestamp,
+      });
+
+      // io.to(`user:${recievingUser?._id}`).emit("user:notify", {
+      //   type: "user:friend_request_accepted_self",
+      //   title: "🤝 You’re Now Friends!",
+      //   // message: `You and ${friendship.friendName} are now friends.`,
+      //   message: `You and ${receiverName} are now friends.`,
+      //   data: existingFriendship,
+      //   timestamp,
+      // });
     }
 
     res
       .status(200)
       .json({ message: "Friendship status updated successfully." });
   } catch (err) {
+    console.log(err);
+
     next(
       createHttpError(
         500,

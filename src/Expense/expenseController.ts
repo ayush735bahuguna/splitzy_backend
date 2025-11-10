@@ -10,13 +10,15 @@ import { isUserFriends } from "../Friendship/friendshipController.ts";
 import { createNotification } from "../Notifications/notificationController.ts";
 import { getIO } from "../config/socket.ts";
 import type { TExpense } from "./expenseType.ts";
-const io = getIO();
+import userModel from "../User/userModel.ts";
 
 export const addExpense = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
+  const io = getIO();
+
   try {
     const _req = req as AuthRequest;
     const {
@@ -203,16 +205,21 @@ export const addExpense = async (
       splitMembers,
     });
 
+    await expense.populate("createdBy", "name");
+
+    const addedByName = (
+      expense.createdBy as unknown as { _id: string; name: string }
+    )?.name;
+
     if (isGroupexpense) {
       io.to(`group:${groupId}`).emit("group:notify", {
         type: "group:expense_added",
         title: "💸 New Group Expense Added!",
-        message: `A new expense has been added to **${group?.name}**.`,
+        message: `A new expense has been added to **${group?.name}** by ${addedByName}.`,
         data: expense,
         timestamp: new Date().toISOString(),
       });
     } else {
-      const addedByName = "Someone";
       relatedUsers?.forEach((memberId) => {
         io.to(`user:${memberId}`).emit("user:notify", {
           type: "user:expense_added",
@@ -224,15 +231,15 @@ export const addExpense = async (
       });
     }
 
-    await createNotification({
-      message: "New expense added",
-      notificationType: {
-        category: "expense",
-        relatedId: expense._id.toString(),
-      },
-      receivingUserId: relatedUsers as [string],
-      type: "FRIEND_REQUEST_DECLINED",
-    });
+    // await createNotification({
+    //   message: "New expense added",
+    //   notificationType: {
+    //     category: "expense",
+    //     relatedId: expense._id.toString(),
+    //   },
+    //   receivingUserId: relatedUsers as [string],
+    //   type: "FRIEND_REQUEST_DECLINED",
+    // });
 
     res.sendStatus(201);
   } catch (err) {
@@ -299,6 +306,8 @@ export const deleteExpense = async (
   res: Response,
   next: NextFunction
 ) => {
+  const io = getIO();
+
   const _req = req as AuthRequest;
   const { expenseId } = req.params;
 

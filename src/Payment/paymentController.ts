@@ -6,13 +6,14 @@ import expenseModel from "../Expense/expenseModel.ts";
 import type { AuthRequest } from "../middleware/authenticate.ts";
 import { createNotification } from "../Notifications/notificationController.ts";
 import { getIO } from "../config/socket.ts";
-const io = getIO();
 
 export const addPayment = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
+  const io = getIO();
+
   const {
     expenseId,
     amount,
@@ -22,13 +23,7 @@ export const addPayment = async (
     isGroupPayment,
   } = req.body;
   const _req = req as AuthRequest;
-  if (
-    !expenseId ||
-    !amount ||
-    !paymentMethod ||
-    !paymentTo ||
-    !isGroupPayment
-  ) {
+  if (!expenseId || !amount || !paymentMethod || !paymentTo) {
     const error = createHttpError(400, "All fields are required");
     return next(error);
   }
@@ -99,21 +94,25 @@ export const addPayment = async (
       isGroupPayment,
     });
 
-    await createNotification({
-      message: "New payment recieved",
-      notificationType: {
-        category: "payment",
-        relatedId: payment._id.toString(),
-      },
-      receivingUserId: [paymentTo] as string[],
-      type: "EXPENSE_CREATED",
-    });
+    await payment.populate("paymentFrom", "name");
+    const senderName = (
+      payment.paymentFrom as unknown as { _id: string; name: string }
+    )?.name;
+
+    // await createNotification({
+    //   message: "New payment recieved",
+    //   notificationType: {
+    //     category: "payment",
+    //     relatedId: payment._id.toString(),
+    //   },
+    //   receivingUserId: [paymentTo] as string[],
+    //   type: "EXPENSE_CREATED",
+    // });
 
     io.to(`user:${paymentTo}`).emit("user:notify", {
       type: "user:payment_received",
       title: "💸 Payment Received!",
-      // message: `${senderName} has sent you ₹${amount}.`,
-      message: `Someone has sent you ₹${amount}.`,
+      message: `${senderName} has sent you ₹${amount}.`,
       user: _req.userId,
       data: payment,
       timestamp: new Date().toISOString(),
